@@ -1,0 +1,62 @@
+name: Wrangler Triage Automation
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_url:
+        description: Url of the issue being triaged
+        required: true
+        type: string
+      issue_type:
+        required: true
+        type: choice
+        description: Issue Type
+        options:
+          - bug
+          - feature
+          - documentation
+          - question
+      severity:
+        description: Issue severity
+        required: true
+        type: choice
+        options:
+          - urgent
+          - high
+          - medium
+          - low
+      target_release:
+        required: true
+        description: Suggested target release
+        type: choice
+        options:
+          - 3.3
+          - 3.4
+          - 3.5
+          - Future
+
+
+env:
+  GH_TOKEN: ${{ secrets.PROJECT_SECRET }}
+
+jobs:
+  triage_issue:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+    - name: Gather data for triage
+      run: |
+        echo "CURRENT_ASSIGNEE=$(gh issue view ${{ inputs.issue_url }} --jq '.assignees[0].login' --json assignees)" >> $GITHUB_ENV
+        echo "ISSUE_ID=$(gh project item-list --owner nhorman 3 --format json --jq '.items[] | select(.content.url == "${{ inputs.issue_url }}") | .id')" >> $GITHUB_ENV
+        echo "PROJECT_ID=$(gh project list 3 --format json --jq '.projects[0].id')" >> $GITHUB_ENV
+        echo "PROPOSED_REL_FIELD=$(gh project field-list --owner nhorman 3 --format json --jq '.fields[] | select(.name == "Proposed Release") | .id')" >> $GITHUB_ENV
+    - name: Apply issue type and severity
+      run: |
+        gh issue edit ${{ inputs.issue_url }} --add-label "issue:${{ inputs.issue_type }}" --add-label "severity:${{ inputs.severity }}"
+    - name: Add project fields
+      run: |
+       gh project item-edit --id $ISSUE_ID --project-id $PROJECT_ID --field-id $PROPOSED_REL_FIELD --text ${{ inputs.target_release }}
+    - name: Remove wrangler assignment and labels
+      run: |
+        gh issue edit ${{ inputs.issue_url }} --remove-label "needs_eval" --remove-assignee "$CURRENT_ASSIGNEE" --add-label "eval_done"
+

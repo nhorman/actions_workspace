@@ -1,0 +1,42 @@
+name: Wrangler process automation
+
+on:
+  issues:
+    types: [opened]
+
+env:
+  GH_TOKEN: ${{ secrets.PROJECT_SECRET }}
+  ISSUE_URL: ${{ github.event.issue.html_url }}
+
+jobs:
+  assign_wrangler:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+    - name: Gather data for assignment
+      run: |
+        echo "CURRENT_WRANGLER=$(gh api repos/openssl/project/issues/402 --jq '.assignees[0].login')" >> $GITHUB_ENV
+        echo "CURRENT_ASSIGNEE=$(gh issue view $ISSUE_URL --jq '.assignees[0].login' --json assignees)" >> $GITHUB_ENV
+        echo "ISSUE_ID=$(gh issue view $ISSUE_URL --jq '.id' --json id)" >> $GITHUB_ENV
+    - name: Initial Wrangler assignment
+      run: |
+        if [ -z "$CURRENT_ASSIGNEE" ]
+        then
+          gh issue edit $ISSUE_URL --add-assignee "$CURRENT_WRANGLER" --add-label "needs_eval"
+        else
+          echo "Skipping issue that is already assigned"
+        fi
+    - name: Add issue to project
+      uses: actions/add-to-project@v0.5.0
+      with:
+        project-url: https://github.com/users/nhorman/projects/3
+        github-token: ${{ secrets.PROJECT_SECRET }}
+    - name: Set project status
+      uses: EndBug/project-fields@v2
+      with:
+        operation: set
+        fields: Status
+        github_token: ${{ secrets.PROJECT_SECRET }}
+        project_url: https://github.com/users/nhorman/projects/3
+        resource_url: ${{ github.event.issue.html_url }} 
+        values: Todo
